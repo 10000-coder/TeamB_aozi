@@ -1,85 +1,97 @@
-# Verification — how the replica was checked
+# Verification
 
-The rule for this project: **no fidelity claim without a measurement**. A result
-is only accepted when it comes from comparing the real page against the port,
-not from looking at a screenshot and judging.
+Every number below is produced by the tools in `tools/` and can be re-run by
+anyone with this repo and Playwright. Nothing here is a self-assessment: the
+harness measures both sides and diffs them element by element.
 
-## The baseline problem
+## Method
 
-The live site cannot be reached from the build container, and the first pass of
-screenshots turned out to be unusable (they had been stitched with a CSS-pixel
-step against device-pixel-ratio-2 segment heights, so the full-page images were
-vertically squashed 2x, and the "reference" pair was 1536×643 for both a desktop
-and a mobile shot — i.e. not reference material at all).
+1. **Baseline.** The live site is captured as hydrated DOM (`reference/`) and
+   kept as an offline-renderable copy, so the reference can be re-measured at any
+   viewport and theme without the network. `tools/build_reference_page.py` builds
+   the landing page; `tools/build_route_pages.py` the four top-bar pages.
+2. **Geometry + computed styles.** `tools/measure.py` walks the rendered tree of
+   the reference and of the production build (`dist/`) at the same viewport,
+   recording each element's tag, class, box and 30 computed properties.
+   `tools/compare.py` aligns them by document order and reports:
+   - element counts and tag/class agreement,
+   - how many boxes agree within 0.75 px,
+   - how many elements have identical computed styles,
+   - the worst geometry and style drift.
+3. **Pixels.** `tools/shoot.py` captures each side as a full-page image built
+   from viewport segments (Chromium cannot render a 23 000 px surface in one
+   shot). `tools/pixel_diff.py` diffs them band by band.
 
-So the baseline is rebuilt from the captured hydrated DOM:
+The reference renders four complete layouts in one document (`.vdl` / `.vdd` /
+`.vml` / `.vmd`) and hides three with CSS, so the reference side is measured with
+the selector of the layout under test while the app renders only the active one.
+For the prerendered token pages — which keep all four variants, as the reference
+does — both sides are measured with the same selector.
 
-* `tools/build_reference_page.py` writes `shared/aozi_reference/site/index.html`
-  — the captured DOM with the framework scripts removed, the two real
-  stylesheets inlined, and remote image URLs rewritten to the archived assets.
-  It renders offline and is byte-equivalent to what the live page painted.
-* `tools/restitch.py` rebuilds correct full-page images from the fetcher's
-  untouched viewport segments.
+## Results — landing page and top-bar routes
 
-Both a reference and a candidate page are then measured with the same code, so
-every comparison is apples to apples.
+| Page | Viewport | Elements | Tag | Class | Geometry ≤0.75 px | Identical styles | docHeight (ref / app) |
+|---|---|---|---|---|---|---|---|
+| `/` | 1440 | 3799 | 100% | 100% | **100%** | 99.58% | 13869 / 13869 |
+| `/` | 375 | 3543 | 100% | 100% | **100%** | 99.66% | 27678 / 27678 |
+| `/docs` | 1440 | 1186 | 100% | 100% | **100%** | 100% | 22978 / 22978 |
+| `/docs` | 375 | 1170 | 100% | 100% | **100%** | 100% | 31436 / 31436 |
+| `/flywheel` | 1440 | 484 | 100% | 100% | **100%** | 99.59% | 6007 / 6007 |
+| `/flywheel` | 375 | 478 | 100% | 100% | **100%** | 99.79% | 5547 / 5547 |
+| `/profile` | 1440 | 114 | 100% | 100% | **100%** | 100% | 2094 / 2094 |
+| `/profile` | 375 | 109 | 100% | 100% | **100%** | 100% | 1910 / 1910 |
+| `/launch` | 1440 | 251 | 100% | 100% | **100%** | 100% | 3093 / 3093 |
+| `/launch` | 375 | 245 | 100% | 100% | **100%** | 100% | 3666 / 3666 |
 
-## Method 1 — structural + geometric diff
+Pixels:
 
-`tools/measure.py` walks every element of the active layout and records its tag,
-its class list, its bounding box (0.1px resolution) and 27 computed style
-properties. `tools/compare.py` aligns the two element lists by document order
-and reports match rates and the worst offenders; `tools/struct_div.py` and
-`tools/first_shift.py` locate the first structural divergence or vertical shift.
+| Page | Viewport | Mean abs diff | Pixels > 8/255 | Identical |
+|---|---|---|---|---|
+| `/` | 1440 | 0.000 / 255 | 224 (0.001%) | 99.999% |
+| `/` | 375 | 0.005 / 255 | 888 (0.009%) | 99.990% |
+| `/docs` | 1440 | 0.000 / 255 | 0 | **100.000%** |
+| `/t/0x3bfd…6969` | 1440 | 0.000 / 255 | 0 | **100.000%** |
 
-`--freeze` disables CSS animations before measuring: the page has a drifting
-background (`skin-drift`), a pausable typing animation in the hero mock
-(`fT1/fT2/fT3`) and hover transitions, which would otherwise be sampled at
-different animation phases and produce false differences.
+## Results — token pages
 
-## Method 2 — pixel diff
+The 47 `/t/<address>` pages are prerendered snapshots of the captured DOM
+(see `docs/ROUTES.md` for why). Three captures of differing shape were kept in
+`reference/routes/` and measured:
 
-`tools/shoot.py` captures a full-page image by scrolling viewport frames and
-stitching them at the correct stride (Chrome's own full-page capture crashes on
-these documents). `tools/pixel_diff.py` compares two images in horizontal bands
-and reports mean absolute difference, the share of pixel-identical pixels and a
-band histogram of the differences.
+| Page | Viewport | Elements | Geometry ≤0.75 px | Identical styles | docHeight (ref / app) |
+|---|---|---|---|---|---|
+| `/t/0x3bfd…6969` (graduated, 50 trades) | 1440 | 372 | **100%** | 100% | 3027 / 3027 |
+| `/t/0x3bfd…6969` | 375 | 345 | **100%** | 100% | 3445 / 3445 |
+| `/t/0x1a7e…339f` (open curve, no trades) | 1440 | 285 | **100%** | 100% | 2578 / 2578 |
+| `/t/0xa572…741a` | 1440 | 420 | **100%** | 100% | 3371 / 3371 |
 
-## Results
+Asset audit across all 47 pages: 93 distinct asset files referenced, 2 missing —
+`2097588968703565824_cWNFSmL8_400x400.jpg` (12 references) and
+`default_profile_400x400.png` (4 references). Both are `404` upstream on the live
+site as well, and neither is in the archive; the reference itself therefore
+renders those avatars blank.
 
-Latest run, candidate = `dist/` production build, reference = the offline page
-built from the captured DOM. Elements are counted inside the active layout root.
+## Residual differences (known, not defects)
 
-| Layout | Elements | Tag | Class | Geometry ≤0.75px | Styles identical | Mean pixel Δ | Pixel-identical |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Desktop 1440 light | 3799 / 3799 | 100% | 100% | 100% | 99.58% | 0.000/255 | 99.999% |
-| Desktop 1440 dark | 3800 / 3800 | 100% | 100% | 100% | 99.58% | — | — |
-| Mobile 375 light | 3543 / 3543 | 100% | 100% | 100% | 99.66% | 0.005/255 | 99.990% |
-| Mobile 375 dark | 3544 / 3544 | 100% | 100% | 100% | 99.66% | — | — |
+- **Style-level rounding on flex rows.** 16 elements on `/` and 2 on `/flywheel`
+  report `margin` values that differ by 0.031 px where the browser resolves
+  `margin-left:auto`. Geometry is unaffected (100% within 0.75 px).
+- **Landing-page text antialiasing.** The 224 / 888 differing pixels on the
+  landing page are glyph rasterisation on four timestamp spans; three mobile
+  clusters correspond to the two missing upstream avatars above.
+- **`compare.py` does not compare text content.** A text dump diff shows
+  whitespace-only differences (JSX collapses inter-element whitespace), no
+  content differences. Tooling gap, tracked in the review notes.
 
-Residual differences, all sub-pixel and non-visual:
+## Reproducing
 
-* **styles 99.6%** — the remaining 16 elements per layout differ only in
-  `margin-left` values resolved by `auto` in a flex row (`419.547px` vs
-  `419.531px`), i.e. 1/64 px of layout rounding.
-* **pixels 99.99%** — the 224 differing pixels (desktop) and 888 (mobile) are
-  text antialiasing on a handful of glyph edges; mean absolute difference is
-  0.000/255 and 0.005/255.
+```sh
+npm run build                       # dist/ is the candidate
+python3 tools/build_route_pages.py  # offline reference copies
+python3 tools/measure.py --root <dir> --path <path> --out <json> --width 1440 --height 900 --variant .vdl
+python3 tools/compare.py <ref.json> <cand.json> --worst 10
+```
 
-## What had to be corrected during verification
-
-The measuring loop caught real defects that a visual skim would have missed:
-
-1. the coin card's market-cap chip rendered `3.80 SPYmcap` (the extractor grabbed
-   the wrapper span instead of the `.num` child);
-2. `$APPLE` uses a third "pay with" mark — an initial chip, not the ETH glyph;
-3. price rows need a literal space before the unit span (`0.0838 SPY`), which JSX
-   strips between an expression and an element;
-4. thread cards are `<div>`, not `<article>`, and carry a "Launched" pill plus a
-   2px connector spine;
-5. the mobile attachment frame is 124px tall with a 126.48px house, not the
-   desktop 160px / 163.2px;
-6. the hero mascot's drop shadow scales with its size (78px mascot → 6px/8px,
-   150px → 12px/15px);
-7. dark mode is separate markup with its own inline colours, and its theme
-   button uses a sun glyph instead of the moon — so it needed its own data pass.
+The app is served from `dist/`; the rewrite in `vercel.json` serves
+`index.html` for the four ported routes and leaves `t/` to the filesystem so the
+prerendered token pages are served directly.

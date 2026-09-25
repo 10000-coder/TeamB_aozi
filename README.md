@@ -94,3 +94,13 @@ npm run preview
 The landing page only. The reference's `/t/<address>`, `/docs`, `/launch`,
 `/flywheel`, `/profile`, `/terms` and `/privacy` routes are not reimplemented;
 those links are left pointing at the original paths.
+
+## Pages
+
+Six kinds of page are reproduced: the landing page `/`, the four pages behind the
+top bar (`/docs`, `/flywheel`, `/profile`, `/launch`), and the 47 token pages
+`/t/<address>`. The top bar, in-page hashes (`/#coins`, `/#porch`) and the token
+pages all navigate inside the clone; nothing links back out to the original site
+except the external services the reference itself links to (X, Pons,
+DexScreener, Blockscout). See `docs/ROUTES.md` for the technique used per page
+and `docs/VERIFICATION.md` for the measured fidelity.
