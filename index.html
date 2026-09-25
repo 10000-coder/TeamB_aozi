@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="light" style="--z: 1;">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f8f6" />
+    <title>aozi.family</title>
+    <meta
+      name="description"
+      content="Tag @aozibot on X. It talks back like Ozzy's AI, and if your tweet has a picture, a name and a ticker, it launches the coin on Pons."
+    />
+    <script>
+      // Apply the stored theme before first paint, as the reference does.
+      try {
+        if (localStorage.getItem('aozi-theme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
