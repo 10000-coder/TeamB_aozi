@@ -1,5 +1,8 @@
 import { JustBuilt } from './components/JustBuilt';
 import { coins, heroStrip, threads } from './data';
+import { hasRoute, RoutePage } from './pages/RoutePage';
+import { useAnchors } from './useAnchors';
+import { useLocation } from './useLocation';
 import { useSiteChrome } from './useSiteChrome';
 import { CoinBoard } from './sections/CoinBoard';
 import { Porch } from './sections/Porch';
@@ -43,10 +46,8 @@ function chrome(variant: Variant, theme: Theme) {
   };
 }
 
-export function App() {
-  const { theme, toggle } = useTheme();
-  const variant = useViewport();
-  const toasts = useSiteChrome(toggle);
+/** The landing page, assembled from the generated static sections. */
+function Home({ variant, theme }: { variant: Variant; theme: Theme }) {
   const k = variantKey(variant, theme);
   const { Backdrop, Floaties, Nav, Tickbar, Hero, Showcase, HowItWorks, Footer } = chrome(variant, theme);
   const spacer = variant === 'vd' ? 110 : 64;
@@ -56,29 +57,48 @@ export function App() {
   // four variant classes (vdl / vdd / vml / vmd). We keep that exact contract
   // and render only the variant the breakpoint selects.
   return (
-    <>
-      <div className={`v ${k}`}>
-        <div style={{ background: 'transparent' }}>
-          <div className="sk" style={sx('position:relative;isolation:isolate;')}>
-            <Backdrop />
-            <div style={sx('position:relative;z-index:2')}>
-              <Floaties />
-              <Nav />
-              <Tickbar />
-              <Hero justBuilt={<JustBuilt strip={heroStrip[k]} theme={theme} />} />
-              <Showcase />
-            </div>
+    <div className={`v ${k}`}>
+      <div style={{ background: 'transparent' }}>
+        <div className="sk" style={sx('position:relative;isolation:isolate;')}>
+          <Backdrop />
+          <div style={sx('position:relative;z-index:2')}>
+            <Floaties />
+            <Nav />
+            <Tickbar />
+            <Hero justBuilt={<JustBuilt strip={heroStrip[k]} theme={theme} />} />
+            <Showcase />
           </div>
-          <div style={sx(`height:${spacer}px`)} />
-          <CoinBoard coins={coins} variant={variant} theme={theme} />
-          <div style={sx(`height:${gap}px`)} />
-          <Porch threads={threads} variant={variant} theme={theme} />
-          <div style={sx(`height:${gap}px`)} />
-          <HowItWorks />
-          <div style={sx(`height:${gap}px`)} />
-          <Footer />
         </div>
+        <div style={sx(`height:${spacer}px`)} />
+        <CoinBoard coins={coins} variant={variant} theme={theme} />
+        <div style={sx(`height:${gap}px`)} />
+        <Porch threads={threads} variant={variant} theme={theme} />
+        <div style={sx(`height:${gap}px`)} />
+        <HowItWorks />
+        <div style={sx(`height:${gap}px`)} />
+        <Footer />
       </div>
+    </div>
+  );
+}
+
+export function App() {
+  const { theme, toggle } = useTheme();
+  const variant = useViewport();
+  const loc = useLocation();
+  const toasts = useSiteChrome(toggle);
+  useAnchors(loc);
+
+  // The four top-bar pages are ported React. The 47 /t/<address> pages are real
+  // prerendered files, so they never reach the router. Anything else falls back
+  // to the landing page instead of rendering nothing.
+  const body = hasRoute(loc.path)
+    ? <RoutePage path={loc.path} variant={variant} theme={theme} />
+    : <Home variant={variant} theme={theme} />;
+
+  return (
+    <>
+      {body}
       {toasts}
     </>
   );

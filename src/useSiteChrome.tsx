@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-/** Canonical token pages live on the real site; the clone links out to them. */
-const ORIGIN = 'https://www.aozi.family';
-
-function external(href: string) {
-  return href.startsWith('/') ? ORIGIN + href : href;
-}
+import { navigate } from './useLocation';
 
 /**
  * Behaviour for the ported static chrome: the theme button, the copy-contract
  * button and the clickable coin cards / X posts. Delegating from one listener
  * keeps the generated markup byte-identical to the reference.
+ *
+ * Link handling mirrors the reference's split:
+ *  - the site's own routes (/docs, /flywheel, /profile, /launch, /#coins, ...)
+ *    navigate client-side, the way the reference's Next.js <Link> does;
+ *  - /t/<address> pages are prerendered files, so they get a real document load;
+ *  - anything else (X, Pons, DexScreener) is left to the browser.
  */
 export function useSiteChrome(toggleTheme: () => void) {
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
@@ -41,15 +41,31 @@ export function useSiteChrome(toggleTheme: () => void) {
         return;
       }
 
+      const anchor = target.closest<HTMLAnchorElement>('a[href]');
+      if (anchor) {
+        const href = anchor.getAttribute('href') ?? '';
+        const blank = anchor.getAttribute('target') === '_blank';
+        const plainClick = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey;
+        if (href.startsWith('/') && !href.startsWith('//') && !blank && plainClick) {
+          event.preventDefault();
+          if (href.startsWith('/t/')) window.location.assign(href);
+          else navigate(href);
+        }
+        return;
+      }
+
       const link = target.closest<HTMLElement>('[data-href]');
       if (!link) return;
-      // Let real anchors (Buy buttons, nav) keep their default behaviour.
-      if (target.closest('a[href]')) return;
       const href = link.dataset.href ?? '';
       if (!href) return;
-      const url = external(href);
-      if (link.getAttribute('role') === 'link') window.open(url, '_blank', 'noopener');
-      else window.location.href = url;
+      // Coin cards point at the clone's own /t/<address> pages.
+      if (href.startsWith('/')) {
+        if (link.getAttribute('role') === 'link') window.open(href, '_blank', 'noopener');
+        else window.location.assign(href);
+        return;
+      }
+      if (link.getAttribute('role') === 'link') window.open(href, '_blank', 'noopener');
+      else window.location.href = href;
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
